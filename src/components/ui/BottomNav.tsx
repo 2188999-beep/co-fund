@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useGroup } from '@/components/GroupContext';
 
 const NAV_ITEMS = [
   {
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+
   {
     href: '/add',
     label: 'Add',
@@ -69,10 +71,16 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+
 ];
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const { allGroups, loading } = useGroup();
+
+  if (pathname.startsWith('/invite') || pathname.startsWith('/observer') || loading || allGroups.length === 0) {
+    return null;
+  }
 
   return (
     <nav

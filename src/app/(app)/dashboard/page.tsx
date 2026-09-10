@@ -2,27 +2,32 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { Group, GroupMember, Transaction, FundAddition, Profile } from '@/lib/types';
+import type { GroupMember, Transaction, Profile } from '@/lib/types';
 import { formatCurrency, formatDate, calcAvgDailySpend, getInitials, getAvatarColor } from '@/lib/utils';
+import { useGroup } from '@/components/GroupContext';
 
 export default function DashboardPage() {
   const supabase = createClient();
+  const { activeGroup: group, allGroups, setActiveGroupId, loading: groupLoading, reloadGroups } = useGroup();
+  
   const [loading, setLoading] = useState(true);
-  const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [fundsAdded, setFundsAdded] = useState<number>(0);
   const [totalSpent, setTotalSpent] = useState<number>(0);
   const [user, setUser] = useState<Profile | null>(null);
+  
   const [showAddFunds, setShowAddFunds] = useState(false);
   const [fundAmount, setFundAmount] = useState('');
   const [fundNote, setFundNote] = useState('');
   const [addingFunds, setAddingFunds] = useState(false);
-  const [showGroupSetup, setShowGroupSetup] = useState(false);
-  const [groupName, setGroupName] = useState('');
-  const [creatingGroup, setCreatingGroup] = useState(false);
+
+  const [showGroupDropdown, setShowGroupDropdown] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
   const loadData = useCallback(async () => {
+    if (groupLoading) return;
+    
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) return;
 
@@ -34,31 +39,18 @@ export default function DashboardPage() {
       .single();
     if (profile) setUser(profile);
 
-    // Get user's first group (for MVP, users belong to one group)
-    const { data: membership } = await supabase
-      .from('group_members')
-      .select('group_id')
-      .eq('user_id', authUser.id)
-      .limit(1)
-      .single();
-
-    if (!membership) {
-      setShowGroupSetup(true);
+    if (!group) {
       setLoading(false);
       return;
     }
 
-    const groupId = membership.group_id;
-
-    // Load group, members, transactions, and fund additions in parallel
-    const [groupRes, membersRes, txRes, fundAddRes] = await Promise.all([
-      supabase.from('groups').select('*').eq('id', groupId).single(),
-      supabase.from('group_members').select('*, profiles(*)').eq('group_id', groupId),
-      supabase.from('transactions').select('*, profiles(*)').eq('group_id', groupId).order('transaction_date', { ascending: false }).order('created_at', { ascending: false }).limit(50),
-      supabase.from('fund_additions').select('*').eq('group_id', groupId),
+    // Load members, transactions, and fund additions for active group
+    const [membersRes, txRes, fundAddRes] = await Promise.all([
+      supabase.from('group_members').select('*, profiles(*)').eq('group_id', group.id),
+      supabase.from('transactions').select('*, profiles(*)').eq('group_id', group.id).order('transaction_date', { ascending: false }).order('created_at', { ascending: false }).limit(50),
+      supabase.from('fund_additions').select('*').eq('group_id', group.id),
     ]);
 
-    if (groupRes.data) setGroup(groupRes.data);
     if (membersRes.data) setMembers(membersRes.data);
     if (txRes.data) setTransactions(txRes.data);
 
@@ -67,7 +59,7 @@ export default function DashboardPage() {
     setFundsAdded(totalAdded);
     setTotalSpent(totalSpentCalc);
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, group, groupLoading]);
 
   useEffect(() => {
     loadData();
@@ -98,35 +90,6 @@ export default function DashboardPage() {
     };
   }, [group, supabase, loadData]);
 
-  const handleCreateGroup = async () => {
-    if (!groupName.trim()) return;
-    setCreatingGroup(true);
-
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return;
-
-    // Create group
-    const { data: newGroup, error: groupError } = await supabase
-      .from('groups')
-      .insert({ name: groupName.trim(), manager_id: authUser.id })
-      .select()
-      .single();
-
-    if (groupError || !newGroup) {
-      setCreatingGroup(false);
-      return;
-    }
-
-    // Add creator as member
-    await supabase
-      .from('group_members')
-      .insert({ group_id: newGroup.id, user_id: authUser.id });
-
-    setShowGroupSetup(false);
-    setCreatingGroup(false);
-    loadData();
-  };
-
   const handleAddFunds = async () => {
     const amount = parseFloat(fundAmount);
     if (!amount || amount <= 0 || !group) return;
@@ -149,10 +112,16 @@ export default function DashboardPage() {
     loadData();
   };
 
+  const handleDeleteTransaction = async (txId: string) => {
+    if (!confirm("Are you sure you want to delete this expense?")) return;
+    await supabase.from('transactions').delete().eq('id', txId);
+    loadData();
+  };
+
   const fundsLeft = fundsAdded - totalSpent;
   const avgDaily = calcAvgDailySpend(transactions);
 
-  if (loading) {
+  if (loading || groupLoading) {
     return (
       <div className="p-4 space-y-4">
         <div className="skeleton h-8 w-40" />
@@ -169,55 +138,137 @@ export default function DashboardPage() {
     );
   }
 
-  // Group setup screen
-  if (showGroupSetup) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6">
-        <div className="animate-fade-in-up text-center w-full max-w-xs">
-          <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">Create Your Group</h2>
-          <p className="text-sm text-slate-500 mb-6">Start a shared fund with your friends</p>
-
-          <input
-            type="text"
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
-            placeholder="e.g., Street Food Gang 🍕"
-            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent mb-4"
-            id="group-name-input"
-          />
-          <button
-            onClick={handleCreateGroup}
-            disabled={!groupName.trim() || creatingGroup}
-            className="btn btn-primary w-full disabled:opacity-50"
-            id="create-group-btn"
-          >
-            {creatingGroup ? 'Creating...' : 'Create Group'}
-          </button>
-        </div>
-      </div>
-    );
+  if (!group) {
+    if (typeof window !== 'undefined') window.location.href = '/groups';
+    return null;
   }
 
   return (
     <div className="px-4 pt-4 pb-2">
       {/* Header */}
-      <div className="flex items-center justify-between mb-5 animate-fade-in-up">
-        <div>
-          <p className="text-xs text-slate-400 font-medium">Welcome back</p>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-            {user?.name?.split(' ')[0] || 'Hey'} 👋
-          </h1>
+      <div className="flex items-center justify-between mb-5 animate-fade-in-up relative z-30">
+        <div className="relative">
+          <p className="text-xs text-slate-400 font-medium">Welcome back, {user?.name?.split(' ')[0] || 'Hey'} 👋</p>
+          <button 
+            onClick={() => setShowGroupDropdown(!showGroupDropdown)}
+            className="flex items-center gap-1.5 mt-0.5 group focus:outline-none"
+          >
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight group-hover:text-emerald-600 transition-colors">
+              {group?.name}
+            </h1>
+            <svg 
+              className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${showGroupDropdown ? 'rotate-180 text-emerald-600' : 'group-hover:text-emerald-600'}`} 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth={2.5} 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          </button>
+          
+          {/* Dropdown Menu */}
+          {showGroupDropdown && (
+            <>
+              {/* Invisible overlay to close dropdown when clicking outside */}
+              <div 
+                className="fixed inset-0 z-40"
+                onClick={() => setShowGroupDropdown(false)}
+              />
+              <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-fade-in-up origin-top-left">
+                <div className="px-3 pb-2 mb-2 border-b border-slate-100">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Switch Group</p>
+                </div>
+                <div className="max-h-[300px] overflow-y-auto px-2 space-y-1">
+                  {allGroups.filter(g => g.id !== group?.id).length === 0 ? (
+                    <div className="px-3 py-4 text-center">
+                      <p className="text-sm text-slate-500">You have no other groups.</p>
+                      <button 
+                        onClick={() => window.location.href = '/groups'}
+                        className="mt-2 text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+                      >
+                        Find or Create One
+                      </button>
+                    </div>
+                  ) : (
+                    allGroups.filter(g => g.id !== group?.id).map((g) => (
+                      <button
+                        key={g.id}
+                        onClick={() => {
+                          setActiveGroupId(g.id);
+                          setShowGroupDropdown(false);
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-between group/item"
+                      >
+                        <span className="font-semibold text-slate-700 group-hover/item:text-slate-900">{g.name}</span>
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-opacity">
+                          <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                          </svg>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          {/* Group name badge */}
-          <div className="px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-100">
-            {group?.name}
-          </div>
+
+        {/* Top Right Settings Menu */}
+        <div className="relative">
+          <button 
+            onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors focus:outline-none"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+            </svg>
+          </button>
+          
+          {showSettingsMenu && (
+            <>
+              <div 
+                className="fixed inset-0 z-40"
+                onClick={() => setShowSettingsMenu(false)}
+              />
+              <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-fade-in-up origin-top-right">
+                
+                {/* Admin Info */}
+                <div className="px-4 py-2 border-b border-slate-100 mb-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Admin</p>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <span className="text-amber-500 text-base">👑</span>
+                    <span className="truncate">{members.find(m => m.user_id === group?.manager_id)?.profiles?.name || 'Loading...'}</span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="px-2 space-y-1 mt-2">
+                  <button
+                    onClick={() => window.location.href = '/groups'}
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3"
+                  >
+                    <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    <span className="font-semibold text-slate-700 text-sm">Create / Join Group</span>
+                  </button>
+
+                  <button
+                    onClick={() => window.location.href = '/settings'}
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3"
+                  >
+                    <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="font-semibold text-slate-700 text-sm">Settings</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -400,10 +451,40 @@ export default function DashboardPage() {
                       <p className="text-sm font-semibold text-slate-900 truncate">
                         {tx.shop_name || 'Expense'}
                       </p>
-                      <p className="text-sm font-bold text-slate-900 shrink-0 ml-2">
-                        {formatCurrency(tx.total_amount)}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-slate-900 shrink-0">
+                          {formatCurrency(tx.total_amount)}
+                        </p>
+                        {(user?.id === tx.paid_by || user?.id === group?.manager_id) && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => window.location.href = `/add?edit=${tx.id}`}
+                              className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
+                              title="Edit Expense"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.89 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.89l12.683-12.683a1.5 1.5 0 00-1.42 1.42z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 7.125L16.862 4.487" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTransaction(tx.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Delete Expense"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.158 0c-.36-.05-.72-.102-1.08-.15m-1.08-.15A59.76 59.76 0 0012 5.25c-2.625 0-5.25.415-7.875 1.24m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.158 0c-.36-.05-.72-.102-1.08-.15m-1.08-.15A59.76 59.76 0 0012 5.25c-2.625 0-5.25.415-7.875 1.24" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
+                    {tx.note && (
+                      <p className="text-[11px] text-slate-500 italic mt-0.5 truncate">
+                        "{tx.note}"
+                      </p>
+                    )}
                     <div className="flex items-center justify-between mt-0.5">
                       <p className="text-[11px] text-slate-400 truncate max-w-[150px]">
                         {itemNames || `by ${payer?.name?.split(' ')[0]}`}

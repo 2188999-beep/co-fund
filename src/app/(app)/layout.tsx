@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import BottomNav from '@/components/ui/BottomNav';
-
+import { GroupProvider } from '@/components/GroupContext';
 export default async function AppLayout({
   children,
 }: {
@@ -17,12 +17,14 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="relative min-h-screen">
-      {/* Main content area — padded for bottom nav */}
-      <main className="safe-bottom">{children}</main>
+    <GroupProvider>
+      <div className="relative min-h-screen">
+        {/* Main content area — padded for bottom nav */}
+        <main className="safe-bottom">{children}</main>
 
-      {/* Bottom Navigation */}
-      <BottomNav />
-    </div>
+        {/* Bottom Navigation */}
+        <BottomNav />
+      </div>
+    </GroupProvider>
   );
 }

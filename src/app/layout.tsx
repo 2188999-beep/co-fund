@@ -32,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -46,7 +46,7 @@ export default function RootLayout({
           content="black-translucent"
         />
       </head>
-      <body className="antialiased select-none overscroll-none">
+      <body className="antialiased select-none overscroll-none" suppressHydrationWarning>
         {/* Constrain to mobile width on desktop */}
         <div className="max-w-md mx-auto min-h-screen bg-slate-50 shadow-xl border-x border-slate-200 relative">
           {children}

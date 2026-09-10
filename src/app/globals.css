@@ -1,11 +1,11 @@
+/* Import Google Font: Inter */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 @import "tailwindcss";
 
 /* ============================================================
    CoFund — Global Styles
    ============================================================ */
-
-/* Import Google Font: Inter */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 /* CSS Custom Properties for the design system */
 :root {
