@@ -1,0 +1,218 @@
+@import "tailwindcss";
+
+/* ============================================================
+   CoFund — Global Styles
+   ============================================================ */
+
+/* Import Google Font: Inter */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* CSS Custom Properties for the design system */
+:root {
+  --color-primary: #059669;
+  --color-primary-light: #34d399;
+  --color-primary-dark: #047857;
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-text: #0f172a;
+  --color-text-secondary: #64748b;
+  --color-border: #e2e8f0;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-success: #22c55e;
+  --bottom-nav-height: 5rem;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Base reset for app-like feel */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Allow text selection in inputs/textareas */
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Prevent iOS zoom on input focus — inputs must be at least 16px */
+input,
+select,
+textarea {
+  font-size: 16px !important;
+}
+
+/* Disable pull-to-refresh */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+
+/* ============================================================
+   Scrollbar styling (thin, subtle)
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+/* ============================================================
+   Animation Keyframes
+   ============================================================ */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInBottom {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Utility classes for animations */
+.animate-fade-in-up {
+  animation: fadeInUp 0.35s ease-out both;
+}
+
+.animate-slide-in-bottom {
+  animation: slideInBottom 0.3s ease-out both;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Staggered animation delays */
+.delay-1 { animation-delay: 0.05s; }
+.delay-2 { animation-delay: 0.1s; }
+.delay-3 { animation-delay: 0.15s; }
+.delay-4 { animation-delay: 0.2s; }
+
+/* Skeleton loading shimmer */
+.skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* ============================================================
+   Safe area padding for notched devices
+   ============================================================ */
+.safe-bottom {
+  padding-bottom: calc(var(--bottom-nav-height) + var(--safe-area-bottom) + 0.5rem);
+}
+
+/* ============================================================
+   Card component base
+   ============================================================ */
+.card {
+  background: var(--color-surface);
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--color-border);
+}
+
+/* ============================================================
+   Touch-friendly button base
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-dark);
+}
+
+.btn-secondary {
+  background-color: #f1f5f9;
+  color: var(--color-text);
+}
+
+.btn-secondary:hover {
+  background-color: #e2e8f0;
+}
+
+.btn-danger {
+  background-color: #fef2f2;
+  color: var(--color-danger);
+}
+
+.btn-danger:hover {
+  background-color: #fee2e2;
+}
