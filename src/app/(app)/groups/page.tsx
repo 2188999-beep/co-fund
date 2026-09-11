@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useGroup } from '@/components/GroupContext';
 import { generateInviteCode } from '@/lib/utils';
@@ -122,11 +123,12 @@ export default function GroupsListPage() {
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Your Groups</h2>
             <div className="space-y-2">
               {allGroups.map((g) => (
-                <button
+                <Link
                   key={g.id}
+                  href="/dashboard"
+                  prefetch={true}
                   onClick={() => {
                     setActiveGroupId(g.id);
-                    router.push('/dashboard');
                   }}
                   className="w-full card p-4 flex items-center justify-between hover:border-emerald-200 hover:ring-2 hover:ring-emerald-50 transition-all text-left"
                 >
@@ -144,7 +146,7 @@ export default function GroupsListPage() {
                   <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                   </svg>
-                </button>
+                </Link>
               ))}
             </div>
           </div>

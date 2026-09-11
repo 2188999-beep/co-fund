@@ -18,15 +18,20 @@ export function formatCurrency(amount: number): string {
  * Format a date string (YYYY-MM-DD) into a human-readable label
  */
 export function formatDate(dateStr: string): string {
-  const date = new Date(dateStr + 'T00:00:00');
+  // Check if it's already a full timestamp or just a date string
+  const date = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+  
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  const compareDate = new Date(date);
+  compareDate.setHours(0, 0, 0, 0);
 
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
-  if (date.getTime() === today.getTime()) return 'Today';
-  if (date.getTime() === yesterday.getTime()) return 'Yesterday';
+  if (compareDate.getTime() === today.getTime()) return 'Today';
+  if (compareDate.getTime() === yesterday.getTime()) return 'Yesterday';
 
   return date.toLocaleDateString('en-IN', {
     day: 'numeric',

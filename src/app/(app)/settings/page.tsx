@@ -10,7 +10,7 @@ import { useGroup } from '@/components/GroupContext';
 export default function SettingsPage() {
   const supabase = createClient();
   const router = useRouter();
-  const { activeGroup: group, loading: groupLoading, reloadGroups, setActiveGroupId } = useGroup();
+  const { activeGroup: group, loading: groupLoading, userProfile, reloadGroups, setActiveGroupId } = useGroup();
   
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<(GroupMember & { profiles: Profile })[]>([]);
@@ -35,8 +35,7 @@ export default function SettingsPage() {
     if (groupLoading) return;
     setLoading(true);
     
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !group) {
+    if (!userProfile || !group) {
       if (typeof window !== 'undefined') window.location.href = '/groups';
       return;
     }
@@ -48,7 +47,7 @@ export default function SettingsPage() {
 
     setGuestPassword(group.guest_password);
     setGroupName(group.name);
-    setIsManager(group.manager_id === user.id);
+    setIsManager(group.manager_id === userProfile.id);
     
     if (membersRes) {
       setMembers(membersRes as (GroupMember & { profiles: Profile })[]);

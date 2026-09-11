@@ -99,6 +99,7 @@ export default function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={true}
               className={`flex flex-col items-center justify-center min-w-[64px] min-h-[44px] transition-all duration-200 ${
                 isActive ? 'scale-105' : ''
               }`}

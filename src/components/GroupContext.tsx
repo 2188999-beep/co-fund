@@ -2,11 +2,12 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { Group } from '@/lib/types';
+import type { Group, Profile } from '@/lib/types';
 
 interface GroupContextType {
   activeGroup: Group | null;
   allGroups: Group[];
+  userProfile: Profile | null;
   setActiveGroupId: (id: string) => void;
   loading: boolean;
   reloadGroups: () => Promise<void>;
@@ -15,6 +16,7 @@ interface GroupContextType {
 const GroupContext = createContext<GroupContextType>({
   activeGroup: null,
   allGroups: [],
+  userProfile: null,
   setActiveGroupId: () => {},
   loading: true,
   reloadGroups: async () => {},
@@ -23,6 +25,7 @@ const GroupContext = createContext<GroupContextType>({
 export function GroupProvider({ children }: { children: React.ReactNode }) {
   const [activeGroup, setActiveGroup] = useState<Group | null>(null);
   const [allGroups, setAllGroups] = useState<Group[]>([]);
+  const [userProfile, setUserProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
@@ -31,6 +34,17 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
     if (!user) {
       setLoading(false);
       return;
+    }
+
+    // Fetch user profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    
+    if (profile) {
+      setUserProfile(profile as Profile);
     }
 
     // Fetch all memberships for this user, including the joined group data
@@ -84,7 +98,7 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <GroupContext.Provider value={{ activeGroup, allGroups, setActiveGroupId, loading, reloadGroups: loadGroups }}>
+    <GroupContext.Provider value={{ activeGroup, allGroups, userProfile, setActiveGroupId, loading, reloadGroups: loadGroups }}>
       {children}
     </GroupContext.Provider>
   );
