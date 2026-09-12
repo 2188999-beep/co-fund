@@ -15,7 +15,6 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<(GroupMember & { profiles: Profile })[]>([]);
   const [isManager, setIsManager] = useState(false);
-  const [guestPassword, setGuestPassword] = useState('');
   
   // Group editing state
   const [groupName, setGroupName] = useState('');
@@ -26,7 +25,6 @@ export default function SettingsPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
-  const [observerSuccess, setObserverSuccess] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -45,7 +43,6 @@ export default function SettingsPage() {
       .select('*, profiles(*)')
       .eq('group_id', group.id);
 
-    setGuestPassword(group.guest_password);
     setGroupName(group.name);
     setIsManager(group.manager_id === userProfile.id);
     
@@ -58,17 +55,6 @@ export default function SettingsPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleUpdatePassword = async () => {
-    if (!group || !guestPassword.trim()) return;
-    setSaving(true);
-    await supabase
-      .from('groups')
-      .update({ guest_password: guestPassword.trim() })
-      .eq('id', group.id);
-    setSaving(false);
-    await reloadGroups();
-  };
 
   const handleUpdateGroupName = async () => {
     if (!group || !groupName.trim() || groupName === group.name) {
@@ -91,14 +77,6 @@ export default function SettingsPage() {
     navigator.clipboard.writeText(link);
     setInviteSuccess('Copied to clipboard!');
     setTimeout(() => setInviteSuccess(''), 2000);
-  };
-
-  const handleCopyObserverLink = () => {
-    if (!group) return;
-    const link = `${window.location.origin}/observer/${group.id}?pwd=${group.guest_password}`;
-    navigator.clipboard.writeText(link);
-    setObserverSuccess('Copied to clipboard!');
-    setTimeout(() => setObserverSuccess(''), 2000);
   };
 
   const handleRemoveMember = async (userId: string) => {
@@ -222,22 +200,6 @@ export default function SettingsPage() {
               </svg>
               {inviteSuccess ? 'Copied!' : 'Copy Invite Link'}
             </button>
-            
-            <h3 className="text-xs font-semibold text-slate-600 mb-2 mt-4">Observer Access</h3>
-            <p className="text-xs text-slate-500 mb-3">
-              Share a read-only dashboard link with shop owners or external friends. 
-              Password: <strong className="text-slate-700">{group?.guest_password}</strong>
-            </p>
-            <button
-              onClick={handleCopyObserverLink}
-              className="btn btn-secondary w-full gap-2 text-sm"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              {observerSuccess ? 'Copied!' : 'Copy Observer Link'}
-            </button>
           </div>
         )}
 
@@ -293,17 +255,17 @@ export default function SettingsPage() {
 
       {/* Guest Access */}
       <div className="card p-4 mb-4 animate-fade-in-up delay-2">
-        <h2 className="text-sm font-bold text-slate-900 mb-3">
-          Observer Access (Shop Owner)
+        <h2 className="text-sm font-bold text-slate-900 mb-1">
+          Guest Access (Shop Owner)
         </h2>
         <p className="text-xs text-slate-500 mb-3">
-          Share this link with your shop owner so they can see the balance
+          Share this unique read-only link with your shop owner or external viewers. No password required.
         </p>
 
         {/* Copy Link */}
         <button
           onClick={handleCopyGuestLink}
-          className="btn btn-secondary w-full mb-3 gap-2 text-sm"
+          className="btn btn-secondary w-full gap-2 text-sm"
           id="copy-guest-link-btn"
         >
           {copied ? (
@@ -322,32 +284,6 @@ export default function SettingsPage() {
             </>
           )}
         </button>
-
-        {/* Guest Password */}
-        {isManager && (
-          <div>
-            <label className="text-xs text-slate-500 font-medium mb-1.5 block">
-              Guest Password
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={guestPassword}
-                onChange={(e) => setGuestPassword(e.target.value)}
-                className="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                id="guest-password-setting"
-              />
-              <button
-                onClick={handleUpdatePassword}
-                disabled={saving}
-                className="btn btn-primary text-sm px-4"
-                id="save-password-btn"
-              >
-                {saving ? '...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Delete Group */}

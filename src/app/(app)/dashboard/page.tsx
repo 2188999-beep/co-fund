@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { GroupMember, Transaction, FundAddition, Profile } from '@/lib/types';
@@ -27,6 +28,11 @@ export default function DashboardPage() {
   const [fundHistory, setFundHistory] = useState<FundAddition[]>([]);
   const [showFundsHistory, setShowFundsHistory] = useState(false);
   const [editingFundId, setEditingFundId] = useState<string | null>(null);
+
+  // Three-dots menu & delete confirmation for transactions
+  const [openMenuTxId, setOpenMenuTxId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const [deleteConfirmTxId, setDeleteConfirmTxId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (groupLoading) return;
@@ -119,8 +125,8 @@ export default function DashboardPage() {
   };
 
   const handleDeleteTransaction = async (txId: string) => {
-    if (!confirm("Are you sure you want to delete this expense?")) return;
     await supabase.from('transactions').delete().eq('id', txId);
+    setDeleteConfirmTxId(null);
     loadData();
   };
 
@@ -150,6 +156,7 @@ export default function DashboardPage() {
   }
 
   return (
+    <>
     <div className="px-4 pt-4 pb-2">
       {/* Header */}
       <div className="flex items-center justify-between mb-5 animate-fade-in-up relative z-30">
@@ -554,24 +561,26 @@ export default function DashboardPage() {
                           {formatCurrency(tx.total_amount)}
                         </p>
                         {(user?.id === tx.paid_by || user?.id === group?.manager_id) && (
-                          <div className="flex items-center gap-1">
+                          <div className="relative">
                             <button
-                              onClick={() => window.location.href = `/add?edit=${tx.id}`}
-                              className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
-                              title="Edit Expense"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (openMenuTxId === tx.id) {
+                                  setOpenMenuTxId(null);
+                                  setMenuPos(null);
+                                } else {
+                                  const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                                  setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                                  setOpenMenuTxId(tx.id);
+                                }
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                              title="More options"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.89 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.89l12.683-12.683a1.5 1.5 0 00-1.42 1.42z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 7.125L16.862 4.487" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => handleDeleteTransaction(tx.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
-                              title="Delete Expense"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.158 0c-.36-.05-.72-.102-1.08-.15m-1.08-.15A59.76 59.76 0 0012 5.25c-2.625 0-5.25.415-7.875 1.24m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.158 0c-.36-.05-.72-.102-1.08-.15m-1.08-.15A59.76 59.76 0 0012 5.25c-2.625 0-5.25.415-7.875 1.24" />
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <circle cx="12" cy="5" r="1.5" />
+                                <circle cx="12" cy="12" r="1.5" />
+                                <circle cx="12" cy="19" r="1.5" />
                               </svg>
                             </button>
                           </div>
@@ -599,5 +608,83 @@ export default function DashboardPage() {
         )}
       </div>
     </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmTxId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-5">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setDeleteConfirmTxId(null)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-fade-in-up">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-rose-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h2 className="text-base font-bold text-slate-900 text-center mb-1">Delete Expense?</h2>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              This expense will be permanently removed and cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmTxId(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteTransaction(deleteConfirmTxId)}
+                className="flex-1 py-2.5 rounded-xl bg-rose-500 text-sm font-semibold text-white hover:bg-rose-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Three-dots dropdown — rendered via portal to escape stacking context */}
+      {openMenuTxId && menuPos && createPortal(
+        <>
+          <div
+            className="fixed inset-0 z-[100]"
+            onClick={() => { setOpenMenuTxId(null); setMenuPos(null); }}
+          />
+          <div
+            className="fixed z-[101] w-36 bg-white rounded-xl shadow-xl border border-slate-100 py-1"
+            style={{ top: menuPos.top, right: menuPos.right }}
+          >
+            <button
+              onClick={() => {
+                setOpenMenuTxId(null);
+                setMenuPos(null);
+                window.location.href = `/add?edit=${openMenuTxId}`;
+              }}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.89 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.89L16.862 4.487z" />
+              </svg>
+              Edit
+            </button>
+            <button
+              onClick={() => {
+                setDeleteConfirmTxId(openMenuTxId);
+                setOpenMenuTxId(null);
+                setMenuPos(null);
+              }}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-500 hover:bg-rose-50 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+    </>
   );
 }

@@ -1,202 +1,176 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useState, use } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import type { Group, Transaction, Profile } from '@/lib/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
-export default function GuestDashboard() {
-  const params = useParams();
-  const groupId = params.groupId as string;
+export default function GuestDashboard({
+  params,
+}: {
+  params: Promise<{ groupId: string }>;
+}) {
+  const { groupId } = use(params);
 
-  const [authenticated, setAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [group, setGroup] = useState<Group | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [fundsAdded, setFundsAdded] = useState(0);
-  const [totalSpent, setTotalSpent] = useState(0);
-
-  // Use anon key for guest access (no auth)
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const STORAGE_KEY = `cofund_guest_${groupId}`;
+  const [status, setStatus] = useState<'loading' | 'valid' | 'invalid'>('loading');
+  const [group, setGroup] = useState<Group | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [fundsAdded, setFundsAdded] = useState(0);
+  const [totalSpent, setTotalSpent] = useState(0);
 
-  const loadData = useCallback(async () => {
-    const [groupRes, txRes, fundAddRes] = await Promise.all([
-      supabase.from('groups').select('*').eq('id', groupId).single(),
-      supabase.from('transactions').select('*, profiles(*)').eq('group_id', groupId).order('transaction_date', { ascending: false }).limit(30),
-      supabase.from('fund_additions').select('*').eq('group_id', groupId),
-    ]);
-
-    if (groupRes.data) setGroup(groupRes.data);
-    if (txRes.data) setTransactions(txRes.data);
-
-    const totalAdded = fundAddRes.data?.reduce((sum, f) => sum + Number(f.amount), 0) ?? 0;
-    const spent = txRes.data?.reduce((sum, t) => sum + Number(t.total_amount), 0) ?? 0;
-    setFundsAdded(totalAdded);
-    setTotalSpent(spent);
-    setLoading(false);
-  }, [supabase, groupId]);
-
-  // Check localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'true') {
-      setAuthenticated(true);
-    } else {
-      setLoading(false);
-    }
-  }, [STORAGE_KEY]);
+    const load = async () => {
+      const { data: grp, error } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('id', groupId)
+        .single();
 
-  // Load data when authenticated
-  useEffect(() => {
-    if (authenticated) {
-      loadData();
-    }
-  }, [authenticated, loadData]);
+      if (error || !grp) {
+        setStatus('invalid');
+        return;
+      }
 
-  const handleLogin = async () => {
-    setError('');
-    // Fetch group to check password
-    const { data: grp } = await supabase
-      .from('groups')
-      .select('guest_password')
-      .eq('id', groupId)
-      .single();
+      setGroup(grp);
 
-    if (!grp) {
-      setError('Group not found');
-      return;
-    }
+      const [txRes, fundRes] = await Promise.all([
+        supabase
+          .from('transactions')
+          .select('*, profiles(name, avatar_url)')
+          .eq('group_id', groupId)
+          .order('transaction_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(50),
+        supabase
+          .from('fund_additions')
+          .select('amount')
+          .eq('group_id', groupId),
+      ]);
 
-    if (grp.guest_password === password) {
-      localStorage.setItem(STORAGE_KEY, 'true');
-      setAuthenticated(true);
-    } else {
-      setError('Wrong password');
-    }
-  };
+      setTransactions((txRes.data as unknown as Transaction[]) || []);
+      const added = fundRes.data?.reduce((s, f) => s + Number(f.amount), 0) ?? 0;
+      const spent = txRes.data?.reduce((s, t) => s + Number(t.total_amount), 0) ?? 0;
+      setFundsAdded(added);
+      setTotalSpent(spent);
+      setStatus('valid');
+    };
 
-  // Password screen
-  if (!authenticated) {
+    load();
+  }, [groupId, supabase]);
+
+  if (status === 'loading') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-b from-slate-50 to-slate-100">
-        <div className="animate-fade-in-up text-center w-full max-w-xs">
-          <div className="w-16 h-16 bg-slate-200 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-1">Observer Access</h2>
-          <p className="text-xs text-slate-500 mb-6">
-            Enter the group password to view the dashboard
-          </p>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
-          <input
-            type="password"
-            inputMode="numeric"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-            placeholder="Enter password"
-            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-base text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent mb-3"
-            id="guest-password-input"
-          />
-          {error && (
-            <p className="text-xs text-rose-500 mb-3 animate-fade-in-up">
-              {error}
-            </p>
-          )}
-          <button
-            onClick={handleLogin}
-            className="btn bg-slate-800 text-white w-full"
-            id="guest-login-btn"
-          >
-            View Dashboard
-          </button>
+  if (status === 'invalid') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
+        <div className="w-16 h-16 bg-rose-100 rounded-2xl flex items-center justify-center mb-4">
+          <span className="text-3xl">🔗</span>
         </div>
+        <h1 className="text-xl font-bold text-slate-900 mb-2">Invalid Link</h1>
+        <p className="text-sm text-slate-500">
+          This guest link is invalid or has expired. Ask the group manager to share a new link.
+        </p>
       </div>
     );
   }
 
   const fundsLeft = fundsAdded - totalSpent;
 
-  if (loading) {
-    return (
-      <div className="p-4 space-y-4">
-        <div className="skeleton h-8 w-48" />
-        <div className="skeleton h-24 rounded-2xl" />
-        <div className="skeleton h-24 rounded-2xl" />
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="skeleton h-16 rounded-2xl" />
-        ))}
-      </div>
-    );
-  }
-
   return (
-    <div className="px-4 pt-6 pb-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5 animate-fade-in-up">
-        <div>
-          <p className="text-xs text-slate-400 font-medium">Observer Mode</p>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-            {group?.name || 'Group'}
-          </h1>
-        </div>
-        <div className="px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-semibold rounded-full">
-          👁 Read Only
-        </div>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="card p-4 animate-fade-in-up delay-1">
-          <p className="text-[11px] text-slate-400 font-medium mb-1">Funds Added</p>
-          <p className="text-xl font-bold text-slate-900">{formatCurrency(fundsAdded)}</p>
-        </div>
-        <div className="card p-4 animate-fade-in-up delay-2">
-          <p className="text-[11px] text-slate-400 font-medium mb-1">Funds Left</p>
-          <p className={`text-xl font-bold ${fundsLeft < 100 ? 'text-rose-500' : 'text-emerald-600'}`}>
-            {formatCurrency(fundsLeft)}
-          </p>
+    <div className="min-h-screen bg-slate-50 pb-12">
+      {/* Header Banner */}
+      <div className="bg-emerald-600 text-white px-6 py-8 rounded-b-3xl shadow-sm mb-6 animate-fade-in-up relative overflow-hidden">
+        <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-emerald-500 rounded-full opacity-40 blur-2xl" />
+        <div className="relative z-10">
+          <span className="inline-block bg-white/20 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-3 border border-white/20">
+            👁 Guest View · Read Only
+          </span>
+          <h1 className="text-2xl font-bold tracking-tight">{group?.name}</h1>
+          <p className="text-emerald-100 text-sm mt-1">Live expense dashboard</p>
         </div>
       </div>
 
-      {/* Recent Transactions */}
-      <h2 className="text-sm font-bold text-slate-900 mb-3 animate-fade-in-up">
-        Recent Expenses
-      </h2>
-      <div className="space-y-2">
-        {transactions.map((tx, idx) => {
-          const payer = tx.profiles as unknown as Profile;
-          return (
-            <div
-              key={tx.id}
-              className="card p-3.5 flex items-center justify-between animate-fade-in-up"
-              style={{ animationDelay: `${idx * 0.03}s` }}
-            >
-              <div>
-                <p className="text-sm font-semibold text-slate-900">
-                  {tx.shop_name || 'Expense'}
-                </p>
-                <p className="text-[11px] text-slate-400">
-                  {payer?.name?.split(' ')[0]} · {formatDate(tx.transaction_date)}
-                </p>
-              </div>
-              <p className="text-sm font-bold text-slate-900">
-                {formatCurrency(tx.total_amount)}
-              </p>
+      <div className="px-4 space-y-4">
+        {/* Stat Cards */}
+        <div className="grid grid-cols-2 gap-3 animate-fade-in-up delay-1">
+          <div className="card p-4">
+            <p className="text-[11px] text-slate-400 font-medium mb-1">Total Added</p>
+            <p className="text-xl font-bold text-emerald-600">{formatCurrency(fundsAdded)}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-[11px] text-slate-400 font-medium mb-1">Funds Left</p>
+            <p className={`text-xl font-bold ${fundsLeft < 100 ? 'text-rose-500' : 'text-slate-900'}`}>
+              {formatCurrency(fundsLeft)}
+            </p>
+          </div>
+        </div>
+
+        <div className="card p-4 flex items-center gap-4 animate-fade-in-up delay-2">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+            <span className="text-xl">💸</span>
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium">Total Spent</p>
+            <p className="text-xl font-bold text-slate-900">{formatCurrency(totalSpent)}</p>
+          </div>
+        </div>
+
+        {/* Transactions */}
+        <div className="animate-fade-in-up delay-3">
+          <h2 className="text-sm font-bold text-slate-900 mb-3 px-1">Recent Expenses</h2>
+          {transactions.length === 0 ? (
+            <div className="card p-8 text-center border-dashed border-2 border-slate-200">
+              <p className="text-slate-400 text-sm">No expenses yet</p>
             </div>
-          );
-        })}
+          ) : (
+            <div className="space-y-2">
+              {transactions.map((tx, idx) => {
+                const payer = tx.profiles as unknown as Profile;
+                const itemNames = tx.items_breakdown?.map((i) => i.name).join(', ');
+                return (
+                  <div
+                    key={tx.id}
+                    className="card p-3.5 flex items-center gap-3"
+                    style={{ animationDelay: `${idx * 0.03}s` }}
+                  >
+                    <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs shrink-0">
+                      {payer?.name?.charAt(0).toUpperCase() || '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-900 truncate">
+                          {tx.shop_name || 'Expense'}
+                        </p>
+                        <p className="text-sm font-bold text-slate-900 shrink-0 ml-2">
+                          {formatCurrency(tx.total_amount)}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <p className="text-[11px] text-slate-400 truncate max-w-[150px]">
+                          {itemNames || `by ${payer?.name?.split(' ')[0]}`}
+                        </p>
+                        <p className="text-[11px] text-slate-400 shrink-0 ml-2">
+                          {formatDate(tx.transaction_date)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

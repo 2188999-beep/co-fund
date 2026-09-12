@@ -50,6 +50,9 @@ export default function AddTransactionPage({ searchParams }: { searchParams?: Pr
   const [newFoodCalories, setNewFoodCalories] = useState('');
   const [newFoodProtein, setNewFoodProtein] = useState('');
 
+  // Header menu
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+
   const loadData = useCallback(async () => {
     if (groupLoading) return;
     if (!userProfile) return;
@@ -425,16 +428,9 @@ export default function AddTransactionPage({ searchParams }: { searchParams?: Pr
 
   return (
     <div className="px-4 pt-4 pb-24">
-      {/* Click outside overlay scoped to entire page for dropdowns */}
-      {showSuggestions && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setShowSuggestions(false)}
-        />
-      )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-5 animate-fade-in-up">
+      <div className="flex items-center justify-between mb-5 animate-fade-in-up relative z-50">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">
             {editId ? 'Edit Expense' : 'Add Expense'}
@@ -443,15 +439,55 @@ export default function AddTransactionPage({ searchParams }: { searchParams?: Pr
             What did you guys eat today?
           </p>
         </div>
-        <button 
-          onClick={() => window.location.href = '/groups'}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-semibold rounded-full border border-slate-200 hover:bg-slate-200 transition-colors"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
-          Groups
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.location.href = '/dashboard'}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+            title="Back to Dashboard"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowHeaderMenu(!showHeaderMenu)}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+              title="More options"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="5" r="1.5" />
+                <circle cx="12" cy="12" r="1.5" />
+                <circle cx="12" cy="19" r="1.5" />
+              </svg>
+            </button>
+            {showHeaderMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowHeaderMenu(false)} />
+                <div className="absolute right-0 top-10 z-20 w-44 bg-white rounded-xl shadow-lg border border-slate-100 py-1">
+                  <button
+                    onClick={() => { setShowHeaderMenu(false); window.location.href = '/dashboard'; }}
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    Dashboard
+                  </button>
+                  <button
+                    onClick={() => { setShowHeaderMenu(false); window.location.href = '/groups'; }}
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Groups
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* AI Magic Fill */}
@@ -700,13 +736,17 @@ export default function AddTransactionPage({ searchParams }: { searchParams?: Pr
                   setActiveSearchTxId(tx.tempId);
                   setShowSuggestions(true);
                 }}
+                onBlur={() => {
+                  // Delay so dropdown button onClick fires before we close
+                  setTimeout(() => setShowSuggestions(false), 150);
+                }}
                 placeholder="+ Add Item (Samosa, Chai...)"
                 className="w-full px-4 py-2.5 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent focus:bg-white transition-colors"
               />
 
               {/* Suggestions Dropdown */}
               {showSuggestions && activeSearchTxId === tx.tempId && searchQuery.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto z-50">
                   {filteredFoods.map((food) => (
                     <button
                       key={food.id}
